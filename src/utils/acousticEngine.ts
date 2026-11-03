@@ -174,10 +174,14 @@ export const CLASS_METADATA: Record<
   },
 };
 
-export const PRESET_CONFIGS: Record<string, { name: string; description: string; params: GeneratorParams }> = {
+export const PRESET_CONFIGS: Record<
+  string,
+  { name: string; description: string; soundTip: string; params: GeneratorParams }
+> = {
   fissure_monolith_14: {
     name: 'Story 1: Fast Crack Spray in Wall #14',
     description: 'Deep 115m water pushing fast through a tiny 3.2mm crack in the dam wall!',
+    soundTip: 'This one sounds like a tiny fountain spraying fast through a narrow crack!',
     params: {
       signatureClass: 'hairline_fissure',
       hydrostaticHeadM: 115,
@@ -194,6 +198,7 @@ export const PRESET_CONFIGS: Record<string, { name: string; description: string;
   foundation_piping_curtain: {
     name: 'Story 2: Muddy Pebble Trickle Under the Floor',
     description: 'Water sneaking through a sandy tunnel under the dam and rattling little pebbles.',
+    soundTip: 'This one sounds like crunchy pebbles and sand grains tumbling in a hidden stream!',
     params: {
       signatureClass: 'internal_piping',
       hydrostaticHeadM: 72,
@@ -210,6 +215,7 @@ export const PRESET_CONFIGS: Record<string, { name: string; description: string;
   conduit_cavitation_shock: {
     name: 'Story 3: Fizzy Popping Bubbles in the Water Pipe',
     description: 'Super-fast water spinning in a big pipe and making loud popping bubble snaps!',
+    soundTip: 'This one sounds like fizzy soda bubbles popping and snapping inside a water pipe!',
     params: {
       signatureClass: 'cavitation_burst',
       hydrostaticHeadM: 142,
@@ -226,6 +232,7 @@ export const PRESET_CONFIGS: Record<string, { name: string; description: string;
   nominal_baseline: {
     name: 'Story 4: Happy Calm Dam (No Leaks!)',
     description: 'A peaceful day at the dam with gentle water waves and a steady spinning water wheel.',
+    soundTip: 'This one sounds like a gentle, sleepy hum from a happy spinning water wheel!',
     params: {
       signatureClass: 'normal_ambient',
       hydrostaticHeadM: 85,
@@ -240,6 +247,43 @@ export const PRESET_CONFIGS: Record<string, { name: string; description: string;
     },
   },
 };
+
+const CLASS_SOUND_TIPS: Record<AcousticClassId, { title: string; tip: string }> = {
+  hairline_fissure: {
+    title: 'Fast Crack Spray Tip',
+    tip: 'This one sounds like a tiny fountain spraying fast through a narrow crack!',
+  },
+  internal_piping: {
+    title: 'Muddy Trickle Tip',
+    tip: 'This one sounds like crunchy pebbles and sand grains tumbling in a hidden stream!',
+  },
+  cavitation_burst: {
+    title: 'Popping Bubbles Tip',
+    tip: 'This one sounds like fizzy soda bubbles popping and snapping inside a water pipe!',
+  },
+  normal_ambient: {
+    title: 'Calm Dam Hum Tip',
+    tip: 'This one sounds like a gentle, sleepy hum from a happy spinning water wheel!',
+  },
+};
+
+/**
+ * Returns a fun, child-friendly 'Sound Tip' explaining what to listen for in the selected dam story or sound class.
+ */
+export function getSoundTipForPresetOrClass(
+  presetKey: string,
+  signatureClass: AcousticClassId
+): { title: string; tip: string } {
+  const preset = PRESET_CONFIGS[presetKey];
+  if (preset) {
+    return {
+      title: preset.name.split(':')[0] + ' Sound Tip',
+      tip: preset.soundTip,
+    };
+  }
+  return CLASS_SOUND_TIPS[signatureClass];
+}
+
 
 /**
  * Mulberry32 deterministic PRNG so unit tests and preset synthesis are 100% reproducible.
@@ -1379,5 +1423,263 @@ export function updateSoundHistory(
   return [nextEntry, ...filtered].slice(0, maxItems);
 }
 
+/**
+ * Generates a subtle, kid-friendly wooden/water-drop 'click' sound effect (~0.065 seconds)
+ * played when changing navigation tabs.
+ */
+export function synthesizeTabClickEffect(sampleRate = 16000): Float32Array {
+  const durationSec = 0.065;
+  const numSamples = Math.floor(sampleRate * durationSec);
+  const samples = new Float32Array(numSamples);
 
+  let phase1 = 0;
+  let phase2 = 0;
 
+  for (let i = 0; i < numSamples; i++) {
+    const t = i / sampleRate;
+    const progress = t / durationSec;
+    // Quick downward pitch tap from 740 Hz -> 420 Hz with warm overtone
+    const instFreq = 740 - 320 * Math.pow(progress, 0.7);
+    phase1 += (2 * Math.PI * instFreq) / sampleRate;
+    phase2 += (2 * Math.PI * (instFreq * 2.15)) / sampleRate;
+
+    const attack = Math.min(1, t / 0.0025);
+    const decay = Math.exp(-68 * t);
+    const env = attack * decay;
+
+    const val = 0.55 * env * (0.75 * Math.sin(phase1) + 0.25 * Math.sin(phase2));
+    samples[i] = Math.max(-0.9, Math.min(0.9, val));
+  }
+
+  return samples;
+}
+
+/**
+ * Generates a gentle, breezy water-air 'whoosh' sound effect (~0.24 seconds)
+ * played when the Sound History sidebar updates.
+ */
+export function synthesizeWhooshEffect(sampleRate = 16000): Float32Array {
+  const durationSec = 0.24;
+  const numSamples = Math.floor(sampleRate * durationSec);
+  const samples = new Float32Array(numSamples);
+
+  const rng = createSeededRandom(777);
+  let phaseSweep = 0;
+  let lpState = 0;
+
+  for (let i = 0; i < numSamples; i++) {
+    const t = i / sampleRate;
+    const progress = t / durationSec;
+
+    // Smooth bell envelope
+    const bellEnv = Math.pow(Math.sin(Math.PI * progress), 1.6);
+
+    // Sweeping center frequency: 260 Hz -> 980 Hz -> 360 Hz
+    const sweepFreq = 260 + 720 * Math.sin(Math.PI * progress);
+    phaseSweep += (2 * Math.PI * sweepFreq) / sampleRate;
+
+    // Soft filtered air noise + gentle tonal breeze carrier
+    const white = rng() * 2 - 1;
+    const alpha = Math.min(0.85, (2 * Math.PI * sweepFreq) / sampleRate);
+    lpState = lpState + alpha * (white - lpState);
+
+    const breeze = 0.55 * lpState * Math.cos(phaseSweep * 0.5) + 0.45 * Math.sin(phaseSweep);
+    const val = 0.45 * bellEnv * breeze;
+    samples[i] = Math.max(-0.9, Math.min(0.9, val));
+  }
+
+  return samples;
+}
+
+/**
+ * Storage key for persisting kid-friendly favorite sound seeds in localStorage.
+ */
+export const FAVORITES_STORAGE_KEY = 'hydrosense_favorite_sounds_v1';
+
+/**
+ * Reads and safely parses the user's favorited sound seeds from localStorage.
+ */
+export function loadFavoritesFromStorage(customStorage?: {
+  getItem: (key: string) => string | null;
+}): SoundHistoryItem[] {
+  try {
+    const storageObj =
+      customStorage ?? (typeof window !== 'undefined' ? window.localStorage : undefined);
+    if (!storageObj) return [];
+    const raw = storageObj.getItem(FAVORITES_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(
+      (item): item is SoundHistoryItem =>
+        Boolean(item) &&
+        typeof item.seed === 'number' &&
+        typeof item.whimsicalName === 'string' &&
+        Boolean(item.params) &&
+        typeof item.params.hydrostaticHeadM === 'number'
+    );
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Writes the user's favorited sound seeds to localStorage.
+ */
+export function saveFavoritesToStorage(
+  favorites: SoundHistoryItem[],
+  customStorage?: { setItem: (key: string, value: string) => void }
+): boolean {
+  try {
+    const storageObj =
+      customStorage ?? (typeof window !== 'undefined' ? window.localStorage : undefined);
+    if (!storageObj) return false;
+    storageObj.setItem(FAVORITES_STORAGE_KEY, JSON.stringify(favorites));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Pure helper to toggle a sound seed's favorite status in a list of favorites.
+ * If present, removes it; if absent, prepends it.
+ */
+export function toggleFavoriteItem(
+  favorites: SoundHistoryItem[],
+  item: SoundHistoryItem
+): { favorites: SoundHistoryItem[]; isFavorite: boolean } {
+  const exists = favorites.some((f) => f.seed === item.seed);
+  if (exists) {
+    const nextList = favorites.filter((f) => f.seed !== item.seed);
+    return { favorites: nextList, isFavorite: false };
+  } else {
+    const nextItem: SoundHistoryItem = {
+      seed: item.seed,
+      whimsicalName: item.whimsicalName || generateWhimsicalSoundName(item.seed),
+      signatureClass: item.signatureClass,
+      presetKey: item.presetKey,
+      params: { ...item.params },
+    };
+    return { favorites: [nextItem, ...favorites], isFavorite: true };
+  }
+}
+
+/**
+ * Pure helper to remove a sound seed from favorites.
+ */
+export function removeFavoriteItem(favorites: SoundHistoryItem[], seed: number): SoundHistoryItem[] {
+  return favorites.filter((f) => f.seed !== seed);
+}
+
+/**
+ * Pure helper to check if a sound seed is currently in favorites.
+ */
+export function isSeedFavorited(favorites: SoundHistoryItem[], seed: number): boolean {
+  return favorites.some((f) => f.seed === seed);
+}
+
+export interface AcousticPulseWavefront {
+  ringIndex: number;
+  phase: number;          // 0.0 (just spawned at sensor) to 1.0 (fully expanded)
+  radiusPx: number;       // radius in pixels based on maxRadius
+  opacity: number;        // alpha transparency (fading outward and attenuating with distance)
+  lineWidth: number;      // stroke weight in px
+}
+
+export interface AcousticPulseState {
+  periodMs: number;               // pulse cycle period in ms (increases with distance)
+  pulseRateBpm: number;           // pulses per minute (e.g., 80 down to 12)
+  pulseSpeedHz: number;           // pulses per second (1.33 down to 0.20)
+  attenuationFactor: number;      // 1.0 (near) down to 0.12 (far)
+  attenuationDb: number;          // 0 dB up to ~34 dB
+  wavefronts: AcousticPulseWavefront[];
+}
+
+/**
+ * Calculates the cycle period in milliseconds for an acoustic wave pulse
+ * originating from the hydrophone/sound source at a given distance.
+ * Speed slows down as distance increases to reflect acoustic propagation delay & attenuation.
+ */
+export function calculateAcousticPulsePeriodMs(distanceM: number): number {
+  const clampedDistance = Math.max(0.5, Math.min(60, Number.isFinite(distanceM) ? distanceM : 1.0));
+  // At 0.5m -> ~700ms (fast pulse, ~86 BPM)
+  // At 5m   -> ~1082ms (~55 BPM)
+  // At 25m  -> ~2782ms (~21.5 BPM)
+  // At 50m  -> ~4907ms (~12.2 BPM)
+  return 700 + (clampedDistance - 0.5) * 85;
+}
+
+/**
+ * Calculates acoustic attenuation factor and decibel loss over distance.
+ */
+export function calculateAcousticAttenuation(distanceM: number): {
+  attenuationFactor: number;
+  attenuationDb: number;
+} {
+  const clampedDistance = Math.max(0.5, Math.min(60, Number.isFinite(distanceM) ? distanceM : 1.0));
+  // Inverse distance spreading model (approx 1/r^0.42 for combined spherical/cylindrical shallow-water guide)
+  const factor = Math.max(0.12, Math.min(1.0, 1.0 / Math.pow(Math.max(1.0, clampedDistance), 0.42)));
+  const db = Number((20 * Math.log10(Math.max(1.0, clampedDistance))).toFixed(1));
+  return {
+    attenuationFactor: Number(factor.toFixed(3)),
+    attenuationDb: db,
+  };
+}
+
+/**
+ * Computes active concentric pulse wavefronts at a given timestamp in milliseconds.
+ */
+export function calculateAcousticPulseState(
+  timestampMs: number,
+  distanceM: number,
+  maxRadiusPx: number = 65,
+  numRings: number = 3
+): AcousticPulseState {
+  const periodMs = calculateAcousticPulsePeriodMs(distanceM);
+  const pulseSpeedHz = Number((1000 / periodMs).toFixed(2));
+  const pulseRateBpm = Number(((1000 / periodMs) * 60).toFixed(1));
+  const { attenuationFactor, attenuationDb } = calculateAcousticAttenuation(distanceM);
+
+  const wavefronts: AcousticPulseWavefront[] = [];
+  const safeTimestamp = Math.max(0, timestampMs);
+
+  for (let i = 0; i < numRings; i++) {
+    // Stagger rings evenly across the cycle
+    const ringOffset = i / numRings;
+    const rawPhase = ((safeTimestamp / periodMs) + ringOffset) % 1.0;
+    const phase = rawPhase < 0 ? rawPhase + 1.0 : rawPhase;
+
+    // Radius expands smoothly from 6px to maxRadiusPx
+    const minRadius = 6;
+    const radiusPx = minRadius + phase * (maxRadiusPx - minRadius);
+
+    // Fade outward: brightest near origin, fading towards max radius, scaled by attenuationFactor
+    const baseAlpha = 1.0 - phase * 0.85;
+    const opacity = Number(
+      Math.max(0.04, Math.min(0.85, baseAlpha * (0.2 + 0.65 * attenuationFactor))).toFixed(3)
+    );
+
+    // Line width thins subtly as it expands
+    const lineWidth = Number(
+      Math.max(1.0, (1.0 - phase * 0.4) * (1.2 + 1.3 * attenuationFactor)).toFixed(2)
+    );
+
+    wavefronts.push({
+      ringIndex: i,
+      phase: Number(phase.toFixed(3)),
+      radiusPx: Number(radiusPx.toFixed(1)),
+      opacity,
+      lineWidth,
+    });
+  }
+
+  return {
+    periodMs: Math.round(periodMs),
+    pulseRateBpm,
+    pulseSpeedHz,
+    attenuationFactor,
+    attenuationDb,
+    wavefronts,
+  };
+}

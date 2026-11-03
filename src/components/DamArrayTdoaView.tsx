@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Compass, FileText, Radio, Search, Sliders } from 'lucide-react';
 import { computeTDOALocalization, TDOALocalizationResult } from '../utils/acousticEngine';
 
 export interface LoggedAnomalyEvent {
@@ -89,21 +90,26 @@ export const DamArrayTdoaView: React.FC<DamArrayTdoaViewProps> = ({
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
       {/* Left Column: TDOA Controls & Hydrophone Array Telemetry */}
       <div className="lg:col-span-5 flex flex-col gap-5">
-        <div className="bg-white border border-slate-200 rounded-lg p-5">
-          <h2 className="text-base font-semibold text-slate-900 mb-1">
-            Find the Hidden Leak Inside the Dam
-          </h2>
-          <p className="text-xs text-slate-600 mb-4">
+        <div className="bg-white border border-slate-200/90 shadow-xs rounded-xl p-5">
+          <div className="flex items-center gap-2 mb-1">
+            <div className="w-6 h-6 rounded-md bg-sky-100 text-sky-700 flex items-center justify-center shrink-0">
+              <Compass className="w-3.5 h-3.5" />
+            </div>
+            <h2 className="text-sm font-bold text-slate-900 tracking-tight">
+              Find the Hidden Leak Inside the Dam
+            </h2>
+          </div>
+          <p className="text-xs text-slate-500 mb-5 leading-relaxed">
             Click anywhere on the big dam picture or slide the bars! Four underwater microphones listen to see which one hears the sound wave first.
           </p>
 
           <div className="space-y-4">
             <div>
-              <div className="flex justify-between text-xs mb-1">
-                <label htmlFor="leak-x-slider" className="font-medium text-slate-700">
-                  Left to Right Spot
+              <div className="flex justify-between items-center text-xs mb-1.5">
+                <label htmlFor="leak-x-slider" className="font-semibold text-slate-700">
+                  Left to Right Spot (X Axis)
                 </label>
-                <span className="font-mono font-semibold text-slate-900 tabular-nums">
+                <span className="font-mono font-bold text-slate-900 bg-slate-100 px-2 py-0.5 rounded border border-slate-200 tabular-nums">
                   {leakX.toFixed(1)} m
                 </span>
               </div>
@@ -115,16 +121,16 @@ export const DamArrayTdoaView: React.FC<DamArrayTdoaViewProps> = ({
                 step={0.5}
                 value={leakX}
                 onChange={(e) => setLeakX( parseFloat(e.target.value) )}
-                className="w-full accent-sky-600 cursor-pointer"
+                className="w-full accent-sky-600 cursor-pointer h-1.5 bg-slate-200 rounded-lg appearance-none"
               />
             </div>
 
             <div>
-              <div className="flex justify-between text-xs mb-1">
-                <label htmlFor="leak-y-slider" className="font-medium text-slate-700">
-                  Bottom to Top Height
+              <div className="flex justify-between items-center text-xs mb-1.5">
+                <label htmlFor="leak-y-slider" className="font-semibold text-slate-700">
+                  Bottom to Top Height (Y Axis)
                 </label>
-                <span className="font-mono font-semibold text-slate-900 tabular-nums">
+                <span className="font-mono font-bold text-slate-900 bg-slate-100 px-2 py-0.5 rounded border border-slate-200 tabular-nums">
                   {leakY.toFixed(1)} m
                 </span>
               </div>
@@ -136,16 +142,16 @@ export const DamArrayTdoaView: React.FC<DamArrayTdoaViewProps> = ({
                 step={0.5}
                 value={leakY}
                 onChange={(e) => setLeakY( parseFloat(e.target.value) )}
-                className="w-full accent-sky-600 cursor-pointer"
+                className="w-full accent-sky-600 cursor-pointer h-1.5 bg-slate-200 rounded-lg appearance-none"
               />
             </div>
 
             <div>
-              <div className="flex justify-between text-xs mb-1">
-                <label htmlFor="jitter-slider" className="font-medium text-slate-700">
-                  Water Echo Wobble
+              <div className="flex justify-between items-center text-xs mb-1.5">
+                <label htmlFor="jitter-slider" className="font-semibold text-slate-700">
+                  Water Echo Wobble (Noise Delay)
                 </label>
-                <span className="font-mono font-semibold text-slate-900 tabular-nums">
+                <span className="font-mono font-bold text-slate-900 bg-slate-100 px-2 py-0.5 rounded border border-slate-200 tabular-nums">
                   {jitterMs.toFixed(2)} ms
                 </span>
               </div>
@@ -157,59 +163,64 @@ export const DamArrayTdoaView: React.FC<DamArrayTdoaViewProps> = ({
                 step={0.01}
                 value={jitterMs}
                 onChange={(e) => setJitterMs( parseFloat(e.target.value) )}
-                className="w-full accent-sky-600 cursor-pointer"
+                className="w-full accent-sky-600 cursor-pointer h-1.5 bg-slate-200 rounded-lg appearance-none"
               />
             </div>
           </div>
 
           {/* TDOA Solver Readout Grid */}
-          <div className="grid grid-cols-3 gap-3 mt-5 pt-4 border-t border-slate-200">
-            <div>
-              <div className="text-xs text-slate-500">Real Leak Spot</div>
-              <div className="text-sm font-mono font-semibold text-slate-900 tabular-nums mt-0.5">
-                ({tdoaResult.trueSourceX.toFixed(1)}, {tdoaResult.trueSourceY.toFixed(1)}) m
+          <div className="grid grid-cols-3 gap-3 mt-5 pt-4 border-t border-slate-200/90">
+            <div className="bg-slate-50/80 border border-slate-200/80 rounded-lg p-2.5">
+              <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Real Leak</div>
+              <div className="text-xs font-mono font-bold text-slate-900 tabular-nums mt-1">
+                ({tdoaResult.trueSourceX.toFixed(1)}, {tdoaResult.trueSourceY.toFixed(1)})m
               </div>
             </div>
-            <div>
-              <div className="text-xs text-slate-500">Computer Found Spot</div>
-              <div className="text-sm font-mono font-semibold text-sky-700 tabular-nums mt-0.5">
-                ({tdoaResult.estimatedX.toFixed(1)}, {tdoaResult.estimatedY.toFixed(1)}) m
+            <div className="bg-sky-50/70 border border-sky-200/70 rounded-lg p-2.5">
+              <div className="text-[10px] font-bold text-sky-700 uppercase tracking-wider">Found Spot</div>
+              <div className="text-xs font-mono font-bold text-sky-800 tabular-nums mt-1">
+                ({tdoaResult.estimatedX.toFixed(1)}, {tdoaResult.estimatedY.toFixed(1)})m
               </div>
             </div>
-            <div>
-              <div className="text-xs text-slate-500">How Close?</div>
-              <div className="text-sm font-mono font-semibold text-emerald-700 tabular-nums mt-0.5">
-                ±{tdoaResult.localizationErrorMeters.toFixed(2)} m
+            <div className="bg-emerald-50/70 border border-emerald-200/70 rounded-lg p-2.5">
+              <div className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider">Accuracy</div>
+              <div className="text-xs font-mono font-bold text-emerald-800 tabular-nums mt-1">
+                ±{tdoaResult.localizationErrorMeters.toFixed(2)}m
               </div>
             </div>
           </div>
         </div>
 
         {/* Hydrophone Array Table */}
-        <div className="bg-white border border-slate-200 rounded-lg p-5">
-          <h3 className="text-sm font-semibold text-slate-900 mb-3">
-            4 Underwater Microphones (Who Heard It First?)
-          </h3>
+        <div className="bg-white border border-slate-200/90 shadow-xs rounded-xl p-5">
+          <div className="flex items-center gap-2 mb-3">
+            <div className="w-6 h-6 rounded-md bg-indigo-100 text-indigo-700 flex items-center justify-center shrink-0">
+              <Radio className="w-3.5 h-3.5" />
+            </div>
+            <h3 className="text-sm font-bold text-slate-900 tracking-tight">
+              4 Underwater Microphones (Who Heard It First?)
+            </h3>
+          </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse text-xs">
               <thead>
-                <tr className="border-b border-slate-200 text-slate-500">
-                  <th className="py-2 pr-2 font-medium">Microphone</th>
-                  <th className="py-2 px-2 font-medium">How Far</th>
-                  <th className="py-2 px-2 font-medium">Travel Time</th>
-                  <th className="py-2 px-2 font-medium">Time Gap</th>
-                  <th className="py-2 pl-2 font-medium text-right">Try It</th>
+                <tr className="border-b border-slate-200 text-slate-500 font-semibold">
+                  <th className="py-2.5 pr-2">Microphone</th>
+                  <th className="py-2.5 px-2">Distance</th>
+                  <th className="py-2.5 px-2">Travel Time</th>
+                  <th className="py-2.5 px-2">Time Gap</th>
+                  <th className="py-2.5 pl-2 text-right">Try It</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 font-mono tabular-nums">
                 {tdoaResult.readings.map((r) => (
-                  <tr key={r.id} className="hover:bg-slate-50">
-                    <td className="py-2.5 pr-2 font-sans font-medium text-slate-900">
+                  <tr key={r.id} className="hover:bg-slate-50/80 transition-colors">
+                    <td className="py-2.5 pr-2 font-sans font-bold text-slate-900">
                       {r.name}
                     </td>
                     <td className="py-2.5 px-2 text-slate-700">{r.distanceMeters.toFixed(1)} m</td>
                     <td className="py-2.5 px-2 text-slate-700">{r.arrivalTimeMs.toFixed(2)} ms</td>
-                    <td className="py-2.5 px-2 text-sky-700">
+                    <td className="py-2.5 px-2 text-sky-700 font-semibold">
                       {r.tdoaRelativeToRefMs >= 0 ? `+${r.tdoaRelativeToRefMs.toFixed(2)}` : r.tdoaRelativeToRefMs.toFixed(2)} ms
                     </td>
                     <td className="py-2.5 pl-2 text-right font-sans">
@@ -222,7 +233,7 @@ export const DamArrayTdoaView: React.FC<DamArrayTdoaViewProps> = ({
                               Math.max(15, Math.round(90 - leakY + 25))
                             )
                           }
-                          className="text-xs font-medium text-sky-700 hover:text-sky-900 underline whitespace-nowrap cursor-pointer"
+                          className="px-2.5 py-1 text-xs font-semibold text-sky-700 hover:text-sky-900 bg-sky-50 hover:bg-sky-100 rounded-md transition-colors whitespace-nowrap cursor-pointer border border-sky-100"
                         >
                           Listen Here
                         </button>
@@ -238,22 +249,27 @@ export const DamArrayTdoaView: React.FC<DamArrayTdoaViewProps> = ({
 
       {/* Right Column: Interactive Dam Cross-Section Schematic & Anomaly Log */}
       <div className="lg:col-span-7 flex flex-col gap-5">
-        <div className="bg-white border border-slate-200 rounded-lg p-5">
-          <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+        <div className="bg-white border border-slate-200/90 shadow-xs rounded-xl p-5">
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-3.5">
             <div>
-              <h2 className="text-sm font-semibold text-slate-900">
-                Inside the Giant Dam Wall (Click Anywhere to Move the Leak!)
-              </h2>
-              <p className="text-xs text-slate-500">
+              <div className="flex items-center gap-2">
+                <div className="w-6 h-6 rounded-md bg-sky-100 text-sky-700 flex items-center justify-center shrink-0">
+                  <Search className="w-3.5 h-3.5" />
+                </div>
+                <h2 className="text-sm font-bold text-slate-900 tracking-tight">
+                  Inside the Giant Dam Wall (Click Anywhere to Move the Leak!)
+                </h2>
+              </div>
+              <p className="text-xs text-slate-500 mt-1">
                 The red dot is the hidden leak · Blue dots are microphones · Yellow plus (+) is where the computer found it!
               </p>
             </div>
-            <div className="text-xs font-mono text-slate-600 tabular-nums">
-              Sound Speed: {tdoaResult.propagationVelocityMps} m/s
+            <div className="text-xs font-mono text-slate-600 tabular-nums bg-slate-50 px-2.5 py-1 rounded-md border border-slate-200">
+              Sound Speed: <strong>{tdoaResult.propagationVelocityMps}</strong> m/s
             </div>
           </div>
 
-          <div className="border border-slate-200 rounded bg-slate-900 overflow-hidden">
+          <div className="border border-slate-800 rounded-lg bg-slate-950 overflow-hidden shadow-inner">
             <svg
               viewBox="0 0 750 420"
               onClick={handleSvgClick}
@@ -431,10 +447,15 @@ export const DamArrayTdoaView: React.FC<DamArrayTdoaViewProps> = ({
         </div>
 
         {/* Structural Anomaly Log & Form */}
-        <div className="bg-white border border-slate-200 rounded-lg p-5">
-          <h3 className="text-sm font-semibold text-slate-900 mb-2">
-            Dam Detective Notebook (Write Down What You Found)
-          </h3>
+        <div className="bg-white border border-slate-200/90 shadow-xs rounded-xl p-5">
+          <div className="flex items-center gap-2 mb-2">
+            <div className="w-6 h-6 rounded-md bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+              <FileText className="w-3.5 h-3.5" />
+            </div>
+            <h3 className="text-sm font-bold text-slate-900 tracking-tight">
+              Dam Detective Notebook (Write Down What You Found)
+            </h3>
+          </div>
           <form onSubmit={handleRecordAnomaly} className="flex flex-col sm:flex-row gap-2.5 mb-4">
             <label htmlFor="anomaly-note-input" className="sr-only">
               Detective Note
@@ -445,11 +466,11 @@ export const DamArrayTdoaView: React.FC<DamArrayTdoaViewProps> = ({
               value={inspectionNote}
               onChange={(e) => setInspectionNote(e.target.value)}
               placeholder="Write a note about this leak spot..."
-              className="flex-1 px-3 py-2 text-xs border border-slate-300 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-sky-600"
+              className="flex-1 px-3 py-2 text-xs border border-slate-300 rounded-lg text-slate-900 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-sky-600 transition-colors"
             />
             <button
               type="submit"
-              className="px-4 py-2 text-xs font-medium text-white bg-slate-900 hover:bg-slate-800 rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+              className="px-4 py-2 text-xs font-bold text-white bg-slate-900 hover:bg-slate-800 rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer shadow-xs"
             >
               Save Leak Note
             </button>
@@ -458,21 +479,21 @@ export const DamArrayTdoaView: React.FC<DamArrayTdoaViewProps> = ({
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse text-xs">
               <thead>
-                <tr className="border-b border-slate-200 text-slate-500">
-                  <th className="py-2 pr-2 font-medium">Note # · Time</th>
-                  <th className="py-2 px-2 font-medium">Part of Dam</th>
-                  <th className="py-2 px-2 font-medium">Found Spot</th>
-                  <th className="py-2 px-2 font-medium">Danger Level</th>
-                  <th className="py-2 pl-2 font-medium">Detective Note</th>
+                <tr className="border-b border-slate-200 text-slate-500 font-semibold">
+                  <th className="py-2.5 pr-2">Note # · Time</th>
+                  <th className="py-2.5 px-2">Part of Dam</th>
+                  <th className="py-2.5 px-2">Found Spot</th>
+                  <th className="py-2.5 px-2">Danger Level</th>
+                  <th className="py-2.5 pl-2">Detective Note</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {anomalyLog.map((entry) => (
-                  <tr key={entry.id}>
-                    <td className="py-2.5 pr-2 font-mono text-slate-700 whitespace-nowrap tabular-nums">
+                  <tr key={entry.id} className="hover:bg-slate-50/80 transition-colors">
+                    <td className="py-2.5 pr-2 font-mono text-slate-700 whitespace-nowrap tabular-nums font-medium">
                       {entry.id} · {entry.timestamp.slice(11)}
                     </td>
-                    <td className="py-2.5 px-2 font-medium text-slate-900 whitespace-nowrap">
+                    <td className="py-2.5 px-2 font-bold text-slate-900 whitespace-nowrap">
                       {entry.monolithZone}
                     </td>
                     <td className="py-2.5 px-2 font-mono text-slate-700 whitespace-nowrap tabular-nums">
@@ -480,13 +501,19 @@ export const DamArrayTdoaView: React.FC<DamArrayTdoaViewProps> = ({
                     </td>
                     <td className="py-2.5 px-2 whitespace-nowrap font-mono">
                       {entry.severity === 'Critical' && (
-                        <span className="text-rose-600 font-semibold">✖ Big Leak</span>
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold bg-rose-50 border border-rose-200 text-rose-700">
+                          ✖ Big Leak
+                        </span>
                       )}
                       {entry.severity === 'Drifting' && (
-                        <span className="text-amber-600 font-semibold">▲ Small Trickle</span>
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold bg-amber-50 border border-amber-200 text-amber-800">
+                          ▲ Small Trickle
+                        </span>
                       )}
                       {entry.severity === 'Nominal' && (
-                        <span className="text-emerald-600 font-semibold">● Safe</span>
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold bg-emerald-50 border border-emerald-200 text-emerald-800">
+                          ● Safe
+                        </span>
                       )}
                     </td>
                     <td className="py-2.5 pl-2 text-slate-600">{entry.notes}</td>
