@@ -1,0 +1,6 @@
+{
+  "name": "HydroSense ML — Dam Acoustic Leak Detection Workbench",
+  "description": "Machine learning hydro-acoustic leak detection and synthetic signal generation system for dam structural health monitoring.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
