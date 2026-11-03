@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Activity, BarChart2, CircleDot, Radio, Volume2, Waves, Zap } from 'lucide-react';
+import { Activity, BarChart2, CircleDot, Layers, Radio, Volume2, Waves, Zap } from 'lucide-react';
 import {
   PsdBandBin,
   SynthesizedSignal,
@@ -7,6 +7,7 @@ import {
   calculateAcousticPulsePeriodMs,
   calculateAcousticAttenuation,
 } from '../utils/acousticEngine';
+import { D3FrequencySpectrum, CharacteristicBandsLegend } from './D3FrequencySpectrum';
 
 interface SignalVisualizerCanvasProps {
   signal: SynthesizedSignal;
@@ -27,6 +28,13 @@ export const SignalVisualizerCanvas: React.FC<SignalVisualizerCanvasProps> = ({
   const [hoverWaveInfo, setHoverWaveInfo] = useState<{ timeMs: number; ampPa: number } | null>(
     null
   );
+  const [visualizerMode, setVisualizerMode] = useState<'waveform' | 'spectrum' | 'dual_overlay'>('waveform');
+  const [hoverSpectrumInfo, setHoverSpectrumInfo] = useState<{
+    freqHz: number;
+    magDb: number;
+    bandName: string;
+    leakRisk: string;
+  } | null>(null);
   const [selectedBandIdx, setSelectedBandIdx] = useState<number | null>(null);
   const [psdMetricMode, setPsdMetricMode] = useState<'db' | 'energy_pct'>('db');
   const [liveFrameIdx, setLiveFrameIdx] = useState<number | null>(null);
@@ -684,81 +692,237 @@ export const SignalVisualizerCanvas: React.FC<SignalVisualizerCanvasProps> = ({
         </div>
       </div>
 
-      {/* Time-Domain Oscilloscope Card with Microphone Distance Acoustic Pulse Animation */}
+      {/* Multi-Mode Acoustic Oscilloscope & D3 Frequency Spectrum Stage */}
       <div className="bg-white border border-slate-200/90 shadow-xs rounded-xl p-5">
-        <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
           <div>
             <div className="flex items-center gap-2">
-              <div className="w-6 h-6 rounded-md bg-teal-100 text-teal-700 flex items-center justify-center shrink-0">
-                <Activity className="w-3.5 h-3.5" />
+              <div
+                className={`w-6 h-6 rounded-md flex items-center justify-center shrink-0 ${
+                  visualizerMode === 'spectrum'
+                    ? 'bg-sky-100 text-sky-700'
+                    : visualizerMode === 'dual_overlay'
+                    ? 'bg-indigo-100 text-indigo-700'
+                    : 'bg-teal-100 text-teal-700'
+                }`}
+              >
+                {visualizerMode === 'spectrum' ? (
+                  <Radio className="w-3.5 h-3.5" />
+                ) : visualizerMode === 'dual_overlay' ? (
+                  <Layers className="w-3.5 h-3.5" />
+                ) : (
+                  <Activity className="w-3.5 h-3.5" />
+                )}
               </div>
               <h2 className="text-sm font-bold text-slate-900 tracking-tight">
-                Water Wiggle Wave &amp; Hydrophone Acoustic Pulse
+                {visualizerMode === 'spectrum'
+                  ? 'Real-Time Frequency Spectrum (D3 Characteristic Leak Finder)'
+                  : visualizerMode === 'dual_overlay'
+                  ? 'Dual Oscilloscope & D3 Frequency Spectrum Overlay'
+                  : 'Water Wiggle Wave & Hydrophone Acoustic Pulse'}
               </h2>
             </div>
             <p className="text-xs text-slate-500 mt-1">
-              Shows how fast the underwater microphone shakes · Pulsing rings slow down as distance increases
+              {visualizerMode === 'spectrum'
+                ? 'Interactive D3 real-time FFT spectrum · Pinpoints characteristic leak signatures in Hz & dB'
+                : visualizerMode === 'dual_overlay'
+                ? 'Superimposed time-domain pressure wave & D3 spectral curve for instant acoustic correlation'
+                : 'Shows how fast the underwater microphone shakes · Pulsing rings slow down as distance increases'}
             </p>
           </div>
-          <div className="text-xs font-mono text-slate-700 tabular-nums bg-slate-50 px-2.5 py-1 rounded-md border border-slate-200">
-            {hoverWaveInfo ? (
-              <span>
-                t = <strong>{hoverWaveInfo.timeMs} ms</strong> · Push = <strong>{hoverWaveInfo.ampPa} Pa</strong>
-              </span>
-            ) : (
-              <span>
-                Shake: <strong>{(signal.features.rmsAmplitude * 120).toFixed(2)} Pa</strong> · Snap: {signal.features.kurtosis.toFixed(2)}
-              </span>
-            )}
+
+          {/* Mode Switcher Segmented Pills */}
+          <div className="flex items-center gap-1 p-0.5 bg-slate-100/90 rounded-lg border border-slate-200 text-xs font-semibold">
+            <button
+              type="button"
+              onClick={() => setVisualizerMode('waveform')}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md transition-all cursor-pointer ${
+                visualizerMode === 'waveform'
+                  ? 'bg-white text-teal-700 shadow-2xs font-bold'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <Activity className="w-3.5 h-3.5" />
+              <span>Time Wave</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setVisualizerMode('spectrum')}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md transition-all cursor-pointer ${
+                visualizerMode === 'spectrum'
+                  ? 'bg-white text-sky-700 shadow-2xs font-bold'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <Radio className="w-3.5 h-3.5" />
+              <span>D3 Spectrum</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setVisualizerMode('dual_overlay')}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md transition-all cursor-pointer ${
+                visualizerMode === 'dual_overlay'
+                  ? 'bg-white text-indigo-700 shadow-2xs font-bold'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <Layers className="w-3.5 h-3.5" />
+              <span>Dual Overlay</span>
+            </button>
           </div>
         </div>
 
-        {/* Live Microphone Distance & Acoustic Pulse Attenuation Strip */}
-        <div className="flex flex-wrap items-center justify-between gap-2 mb-2 px-3 py-1.5 bg-sky-50/70 border border-sky-100 rounded-lg text-xs">
-          <div className="flex items-center gap-2 font-mono">
-            <span className="flex items-center gap-1.5 font-bold text-sky-900">
-              <CircleDot className="w-3.5 h-3.5 text-sky-600 animate-pulse" />
-              <span>Mic: {distanceM.toFixed(1)}m</span>
-            </span>
-            <span aria-hidden="true" className="text-sky-300">·</span>
-            <span className="text-slate-600">
-              Pulse: <strong className="text-sky-800">{pulseTele.pulseRateBpm} BPM</strong> ({pulseTele.pulseSpeedHz} Hz)
-            </span>
-            <span aria-hidden="true" className="text-sky-300">·</span>
-            <span className="text-slate-600">
-              Loss: <strong className="text-sky-800">-{pulseTele.attenuationDb} dB</strong>
+        {/* Telemetry Ribbons based on active mode */}
+        {visualizerMode === 'waveform' && (
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-2 px-3 py-1.5 bg-sky-50/70 border border-sky-100 rounded-lg text-xs">
+            <div className="flex items-center gap-2 font-mono">
+              <span className="flex items-center gap-1.5 font-bold text-sky-900">
+                <CircleDot className="w-3.5 h-3.5 text-sky-600 animate-pulse" />
+                <span>Mic: {distanceM.toFixed(1)}m</span>
+              </span>
+              <span aria-hidden="true" className="text-sky-300">·</span>
+              <span className="text-slate-600">
+                Pulse: <strong className="text-sky-800">{pulseTele.pulseRateBpm} BPM</strong> ({pulseTele.pulseSpeedHz} Hz)
+              </span>
+              <span aria-hidden="true" className="text-sky-300">·</span>
+              <span className="text-slate-600">
+                Loss: <strong className="text-sky-800">-{pulseTele.attenuationDb} dB</strong>
+              </span>
+            </div>
+
+            <span className="text-[11px] font-sans font-semibold text-sky-700 bg-white/80 border border-sky-200/80 px-2 py-0.5 rounded-full">
+              {distanceM <= 3
+                ? '⚡ Rapid Near-Field Pulses'
+                : distanceM <= 12
+                ? '🌊 Moderate Propagation'
+                : '🐢 Slow Attenuated Waves'}
             </span>
           </div>
+        )}
 
-          <span className="text-[11px] font-sans font-semibold text-sky-700 bg-white/80 border border-sky-200/80 px-2 py-0.5 rounded-full">
-            {distanceM <= 3
-              ? '⚡ Rapid Near-Field Pulses'
-              : distanceM <= 12
-              ? '🌊 Moderate Propagation'
-              : '🐢 Slow Attenuated Waves'}
-          </span>
-        </div>
+        {(visualizerMode === 'spectrum' || visualizerMode === 'dual_overlay') && (
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-2 px-3 py-1.5 bg-indigo-50/70 border border-indigo-100 rounded-lg text-xs">
+            <div className="flex items-center gap-2 font-mono">
+              {hoverSpectrumInfo ? (
+                <>
+                  <span className="font-bold text-indigo-900">
+                    {hoverSpectrumInfo.freqHz} Hz ({hoverSpectrumInfo.magDb} dB)
+                  </span>
+                  <span aria-hidden="true" className="text-indigo-300">·</span>
+                  <span className="text-slate-700 font-sans font-semibold">
+                    {hoverSpectrumInfo.bandName}
+                  </span>
+                </>
+              ) : (
+                <>
+                  <span className="text-slate-600">
+                    Centroid: <strong className="text-indigo-900">{signal.features.spectralCentroidHz.toFixed(0)} Hz</strong>
+                  </span>
+                  <span aria-hidden="true" className="text-indigo-300">·</span>
+                  <span className="text-slate-600">
+                    High Freq Ratio: <strong className="text-indigo-900">{(signal.features.highFreqEnergyRatio * 100).toFixed(1)}%</strong>
+                  </span>
+                </>
+              )}
+            </div>
 
-        <div className="relative rounded-lg overflow-hidden border border-slate-200 bg-slate-50 shadow-2xs">
-          <canvas
-            ref={waveCanvasRef}
-            width={760}
-            height={135}
-            data-testid="waveform-canvas"
-            data-distance-m={distanceM}
-            data-pulse-bpm={pulseTele.pulseRateBpm}
-            data-pulse-speed-hz={pulseTele.pulseSpeedHz}
-            onMouseMove={handleWaveMouseMove}
-            onMouseLeave={() => setHoverWaveInfo(null)}
-            className="w-full h-[135px] block cursor-crosshair"
+            <span className="text-[11px] font-sans font-semibold text-indigo-700 bg-white/90 border border-indigo-200/80 px-2 py-0.5 rounded-full">
+              {signal.features.subBandHighRatio > 0.4
+                ? '⚡ High Fissure Jet Spray Band (1.8–4.8 kHz)'
+                : signal.features.subBandUltraRatio > 0.15
+                ? '💥 Cavitation Micro-Implosions (>4.8 kHz)'
+                : signal.features.subBandMidRatio > 0.25
+                ? '⚠️ Piping Seepage Sand Band (0.4–1.8 kHz)'
+                : '🟢 Normal Ambient Turbine Flow (<400 Hz)'}
+            </span>
+          </div>
+        )}
+
+        {/* 1. Time-Domain Waveform Only */}
+        {visualizerMode === 'waveform' && (
+          <>
+            <div className="relative rounded-lg overflow-hidden border border-slate-200 bg-slate-50 shadow-2xs">
+              <canvas
+                ref={waveCanvasRef}
+                width={760}
+                height={135}
+                data-testid="waveform-canvas"
+                data-distance-m={distanceM}
+                data-pulse-bpm={pulseTele.pulseRateBpm}
+                data-pulse-speed-hz={pulseTele.pulseSpeedHz}
+                onMouseMove={handleWaveMouseMove}
+                onMouseLeave={() => setHoverWaveInfo(null)}
+                className="w-full h-[135px] block cursor-crosshair"
+              />
+            </div>
+            <div className="mt-2.5 flex items-center justify-between text-[11px] text-slate-500 font-mono px-1">
+              <span>Pulsing rings around the signal represent acoustic wave arrival</span>
+              <span className="text-sky-700 font-semibold">{pulseTele.periodMs}ms cycle (slows as distance increases)</span>
+            </div>
+          </>
+        )}
+
+        {/* 2. D3 Real-Time Frequency Spectrum Only */}
+        {visualizerMode === 'spectrum' && (
+          <D3FrequencySpectrum
+            signal={signal}
+            liveFrameIdx={liveFrameIdx}
+            isPlaying={isPlaying}
+            onHoverSpectrum={setHoverSpectrumInfo}
           />
-        </div>
+        )}
 
-        {/* Physical Acoustic Attenuation Caption */}
-        <div className="mt-2.5 flex items-center justify-between text-[11px] text-slate-500 font-mono px-1">
-          <span>Pulsing rings around the signal represent acoustic wave arrival</span>
-          <span className="text-sky-700 font-semibold">{pulseTele.periodMs}ms cycle (slows as distance increases)</span>
-        </div>
+        {/* 3. Dual Overlay (Superimposed Waveform Canvas + D3 Frequency Spectrum SVG) */}
+        {visualizerMode === 'dual_overlay' && (
+          <div className="space-y-2.5">
+            <div className="relative rounded-lg overflow-hidden border border-slate-800 bg-slate-950 shadow-inner h-[155px]">
+              {/* Layer 1: Time-Domain Wave in Background with Soft Glow */}
+              <canvas
+                ref={waveCanvasRef}
+                width={760}
+                height={155}
+                data-testid="waveform-canvas"
+                data-distance-m={distanceM}
+                data-pulse-bpm={pulseTele.pulseRateBpm}
+                data-pulse-speed-hz={pulseTele.pulseSpeedHz}
+                onMouseMove={handleWaveMouseMove}
+                onMouseLeave={() => setHoverWaveInfo(null)}
+                className="absolute inset-0 w-full h-[155px] block opacity-50 mix-blend-screen"
+              />
+
+              {/* Layer 2: D3 Frequency Spectrum SVG Overlaid on Top */}
+              <div className="absolute inset-0 pointer-events-auto">
+                <D3FrequencySpectrum
+                  signal={signal}
+                  liveFrameIdx={liveFrameIdx}
+                  isPlaying={isPlaying}
+                  isOverlay={true}
+                  hideLegend={true}
+                  onHoverSpectrum={setHoverSpectrumInfo}
+                />
+              </div>
+            </div>
+
+            {/* Characteristic Leak Bands Legend */}
+            <CharacteristicBandsLegend
+              activeBandFilter={null}
+              onToggleFilter={() => {}}
+            />
+
+            <div className="flex items-center justify-between text-[11px] text-slate-500 font-mono px-1">
+              <span className="flex items-center gap-1.5">
+                <span className="w-2.5 h-2.5 rounded-full bg-teal-500 inline-block"></span>
+                <span>Background: Waveform (Pressure Pa)</span>
+                <span className="text-slate-300">|</span>
+                <span className="w-2.5 h-2.5 rounded-full bg-sky-500 inline-block"></span>
+                <span>Foreground: D3 FFT Spectrum (dB/Hz)</span>
+              </span>
+              <span className="text-indigo-700 font-semibold">
+                Characteristic Leak Bands Highlighted
+              </span>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

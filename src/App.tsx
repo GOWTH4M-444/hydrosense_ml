@@ -28,6 +28,7 @@ import {
   Trash2,
   Volume2,
   Waves,
+  Box,
 } from 'lucide-react';
 import {
   AcousticClassId,
@@ -54,8 +55,9 @@ import { SignalVisualizerCanvas } from './components/SignalVisualizerCanvas';
 import { DamArrayTdoaView } from './components/DamArrayTdoaView';
 import { MlTrainingLabView } from './components/MlTrainingLabView';
 import { PythonGeneratorStudio } from './components/PythonGeneratorStudio';
+import { Dam3DSceneView } from './components/Dam3DSceneView';
 
-type ActiveSection = 'workbench' | 'tdoa_array' | 'ml_lab' | 'generator_py';
+type ActiveSection = 'workbench' | '3d_dam' | 'tdoa_array' | 'ml_lab' | 'generator_py';
 
 export default function App() {
   const [activeSection, setActiveSection] = useState<ActiveSection>('workbench');
@@ -361,6 +363,18 @@ export default function App() {
           </button>
           <button
             type="button"
+            onClick={() => handleSwitchTab('3d_dam')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md transition-all whitespace-nowrap shrink-0 cursor-pointer ${
+              activeSection === '3d_dam'
+                ? 'bg-white text-sky-700 shadow-xs font-bold'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
+            }`}
+          >
+            <Box className="w-3.5 h-3.5 text-sky-600" />
+            <span>3D Dam Twin</span>
+          </button>
+          <button
+            type="button"
             onClick={() => handleSwitchTab('tdoa_array')}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md transition-all whitespace-nowrap shrink-0 cursor-pointer ${
               activeSection === 'tdoa_array'
@@ -466,7 +480,7 @@ export default function App() {
       </div>
 
       {/* Main Content Workspace */}
-      <main className="flex-1 max-w-[1440px] w-full mx-auto px-6 py-6">
+      <main className={activeSection === '3d_dam' ? 'flex-1 w-full p-0' : 'flex-1 max-w-[1440px] w-full mx-auto px-6 py-6'}>
         {activeSection === 'workbench' && (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
             {/* Left Column (3 cols): Kid-Friendly Dam Sound Builder */}
@@ -1236,6 +1250,17 @@ export default function App() {
               </div>
             </aside>
           </div>
+        )}
+ 
+        {activeSection === '3d_dam' && (
+          <Dam3DSceneView
+            params={params}
+            activePresetKey={activePresetKey}
+            onSelectPreset={(key) => handleSelectPreset(key)}
+            onUpdateParam={updateParam}
+            whimsicalName={whimsicalSoundName}
+            onJumpToWorkbench={() => handleSwitchTab('workbench')}
+          />
         )}
 
         {activeSection === 'tdoa_array' && (
