@@ -1683,3 +1683,461 @@ export function calculateAcousticPulseState(
     wavefronts,
   };
 }
+
+export interface Dam3DRegimeAnimationProfile {
+  regime: AcousticClassId;
+  severity: 'Nominal' | 'Drifting' | 'Critical';
+  isDanger: boolean;
+  title: string;
+  badgeLabel: string;
+  animationSummary: string;
+  structuralEffectLabel: string;
+  primaryColorHex: number;
+  secondaryColorHex: number;
+  waveColorHex: number;
+  buoyBeaconColorHex: number;
+  crackWidthScale: number;
+  crackPulseSpeedHz: number;
+  crackJetVelocityRatio: number;
+  pipingSedimentIntensity: number;
+  cavitationShockRateHz: number;
+  structuralTremorAmplitude: number;
+  recommendedCameraPreset: 'overview' | 'leak' | 'piping' | 'cavitation';
+}
+
+/**
+ * Computes deterministic 3D animation parameters for the Dam Digital Twin
+ * based on the selected acoustic signature class and physical parameters.
+ */
+export function getDam3DRegimeAnimationProfile(
+  params: GeneratorParams
+): Dam3DRegimeAnimationProfile {
+  const headNorm = Math.max(0.2, Math.min(2.0, params.hydrostaticHeadM / 100));
+  const orificeNorm = Math.max(0.3, Math.min(2.5, params.orificeDiameterMm / 5));
+  const rpmNorm = Math.max(0.5, Math.min(2.0, params.turbineRpm / 150));
+
+  switch (params.signatureClass) {
+    case 'hairline_fissure':
+      return {
+        regime: 'hairline_fissure',
+        severity: 'Critical',
+        isDanger: true,
+        title: 'Critical Fissure Fracture & High-Pressure Jet',
+        badgeLabel: 'DANGER · Active Structural Crack Spray',
+        animationSummary:
+          'Jagged concrete monolith crack pulsing under hydrostatic stress with pressurized water jet & crimson shock rings',
+        structuralEffectLabel: 'Monolith Block #14 Tensile Fracture',
+        primaryColorHex: 0xef4444,
+        secondaryColorHex: 0x38bdf8,
+        waveColorHex: 0xf43f5e,
+        buoyBeaconColorHex: 0xef4444,
+        crackWidthScale: Number((0.75 + 0.55 * orificeNorm + 0.25 * headNorm).toFixed(2)),
+        crackPulseSpeedHz: Number((2.2 + 0.8 * headNorm).toFixed(2)),
+        crackJetVelocityRatio: Number((1.0 + 0.65 * headNorm).toFixed(2)),
+        pipingSedimentIntensity: 0,
+        cavitationShockRateHz: 0,
+        structuralTremorAmplitude: Number((0.025 * headNorm).toFixed(4)),
+        recommendedCameraPreset: 'leak',
+      };
+
+    case 'internal_piping':
+      return {
+        regime: 'internal_piping',
+        severity: 'Drifting',
+        isDanger: true,
+        title: 'Foundation Seepage Tunnel & Muddy Piping Erosion',
+        badgeLabel: 'WARNING · Foundation Soil Piping & Sediment Plume',
+        animationSummary:
+          'Sub-foundation seepage channel eroding gravel & muddy silt plume beneath the dam plinth with amber acoustic rings',
+        structuralEffectLabel: 'Grout Curtain Under-Seepage Boil',
+        primaryColorHex: 0xf59e0b,
+        secondaryColorHex: 0xb45309,
+        waveColorHex: 0xfbbf24,
+        buoyBeaconColorHex: 0xf59e0b,
+        crackWidthScale: 0,
+        crackPulseSpeedHz: 0,
+        crackJetVelocityRatio: 0,
+        pipingSedimentIntensity: Number((0.8 + 0.5 * orificeNorm + 0.35 * headNorm).toFixed(2)),
+        cavitationShockRateHz: 0,
+        structuralTremorAmplitude: Number((0.018 * orificeNorm).toFixed(4)),
+        recommendedCameraPreset: 'piping',
+      };
+
+    case 'cavitation_burst':
+      return {
+        regime: 'cavitation_burst',
+        severity: 'Critical',
+        isDanger: true,
+        title: 'Ultrasonic Vapor Cavitation & Shock Implosions',
+        badgeLabel: 'DANGER · Violent Cavitation Bubble Implosions',
+        animationSummary:
+          'High-energy vapor pockets imploding at intake & penstock portals with flashing shockwave spheres & structural tremor',
+        structuralEffectLabel: 'Intake Conduit & Penstock Shockwave Pitting',
+        primaryColorHex: 0xf43f5e,
+        secondaryColorHex: 0xe879f9,
+        waveColorHex: 0xfb7185,
+        buoyBeaconColorHex: 0xf43f5e,
+        crackWidthScale: 0.35,
+        crackPulseSpeedHz: 3.6,
+        crackJetVelocityRatio: 0.45,
+        pipingSedimentIntensity: 0,
+        cavitationShockRateHz: Number((3.2 + 1.4 * headNorm + 0.9 * rpmNorm).toFixed(2)),
+        structuralTremorAmplitude: Number((0.045 * headNorm).toFixed(4)),
+        recommendedCameraPreset: 'cavitation',
+      };
+
+    case 'normal_ambient':
+    default:
+      return {
+        regime: 'normal_ambient',
+        severity: 'Nominal',
+        isDanger: false,
+        title: 'Nominal Reservoir Flow & Steady Turbine Hum',
+        badgeLabel: 'SAFE · Intact Structure & Calm Reservoir',
+        animationSummary:
+          'Zero structural cracks or erosion; smooth reservoir waves with gentle emerald turbine harmonic rings',
+        structuralEffectLabel: 'Monolith & Foundation Integrity Nominal',
+        primaryColorHex: 0x10b981,
+        secondaryColorHex: 0x38bdf8,
+        waveColorHex: 0x34d399,
+        buoyBeaconColorHex: 0x10b981,
+        crackWidthScale: 0,
+        crackPulseSpeedHz: 0,
+        crackJetVelocityRatio: 0,
+        pipingSedimentIntensity: 0,
+        cavitationShockRateHz: 0,
+        structuralTremorAmplitude: 0,
+        recommendedCameraPreset: 'overview',
+      };
+  }
+}
+
+export const HIGH_PROBABILITY_LEAK_THRESHOLD = 0.5;
+
+export interface DamBaseEmitterZone {
+  id: string;
+  label: string;
+  x: number;
+  y: number;
+  z: number;
+}
+
+export interface DamBaseLeakParticleConfig {
+  isActive: boolean;
+  leakProbability: number;
+  estimatedFlowRateLpm: number;
+  activeParticleCount: number;
+  maxParticleCount: number;
+  emissionRatePerSec: number;
+  upwardBuoyancySpeed: number;
+  forwardJetVelocity: number;
+  turbulenceSwirlRadius: number;
+  dropletScaleMin: number;
+  dropletScaleMax: number;
+  primaryBubbleColorHex: number;
+  foamDropletColorHex: number;
+  baseEmitterZones: DamBaseEmitterZone[];
+}
+
+export interface DamBaseParticleTransform {
+  x: number;
+  y: number;
+  z: number;
+  scaleX: number;
+  scaleY: number;
+  scaleZ: number;
+  isDroplet: boolean;
+  cyclePhase: number;
+  visible: boolean;
+}
+
+/**
+ * Computes the React-Three-Fiber particle system configuration for simulating leaking water
+ * bubbles and droplets emerging from the dam base when the acoustic signal identifies
+ * a high-probability leak (leakProbability >= 0.50).
+ */
+export function calculateDamBaseLeakParticleConfig(
+  params: GeneratorParams,
+  explicitLeakProbability?: number
+): DamBaseLeakParticleConfig {
+  const maxParticleCount = 140;
+
+  // Determine leak probability either from explicit ML inference or deterministic physical model
+  let leakProb = explicitLeakProbability;
+  if (typeof leakProb !== 'number' || !Number.isFinite(leakProb)) {
+    if (params.signatureClass === 'normal_ambient') {
+      leakProb = 0.08;
+    } else if (params.signatureClass === 'internal_piping') {
+      leakProb = 0.88;
+    } else if (params.signatureClass === 'hairline_fissure') {
+      leakProb = 0.97;
+    } else {
+      leakProb = 0.95;
+    }
+  }
+  const clampedProb = Number(Math.max(0.01, Math.min(0.998, leakProb)).toFixed(3));
+  const isActive = clampedProb >= HIGH_PROBABILITY_LEAK_THRESHOLD;
+
+  const headNorm = Math.max(0.2, Math.min(1.6, params.hydrostaticHeadM / 100));
+  const orificeNorm = Math.max(0.2, Math.min(2.5, params.orificeDiameterMm / 5));
+
+  // Physical volumetric discharge Q = Cd * A * sqrt(2 * g * H) in Liters/min
+  const areaM2 = Math.PI * Math.pow((params.orificeDiameterMm / 1000) * 0.5, 2);
+  const velocityMps = 0.62 * Math.sqrt(2 * 9.80665 * Math.max(5, params.hydrostaticHeadM));
+  const estimatedFlowRateLpm = isActive
+    ? Number((areaM2 * velocityMps * 1000 * 60 * clampedProb).toFixed(1))
+    : 0;
+
+  const activeParticleCount = isActive
+    ? Math.min(
+        maxParticleCount,
+        Math.max(
+          48,
+          Math.round(48 + clampedProb * 45 + headNorm * 24 + Math.min(23, orificeNorm * 12))
+        )
+      )
+    : 0;
+
+  const emissionRatePerSec = isActive
+    ? Number((activeParticleCount * (0.45 + 0.35 * headNorm)).toFixed(1))
+    : 0;
+
+  const upwardBuoyancySpeed = isActive ? Number((0.45 + 0.32 * headNorm).toFixed(2)) : 0;
+  const forwardJetVelocity = isActive
+    ? Number((4.5 + 3.8 * headNorm + 1.2 * orificeNorm).toFixed(2))
+    : 0;
+  const turbulenceSwirlRadius = isActive
+    ? Number((0.85 + 0.65 * orificeNorm + 0.35 * headNorm).toFixed(2))
+    : 0;
+
+  let primaryBubbleColorHex = 0x38bdf8; // sky-400
+  let foamDropletColorHex = 0xe0f2fe;   // sky-100
+  if (params.signatureClass === 'internal_piping') {
+    primaryBubbleColorHex = 0xfbbf24;   // amber-tinted sediment bubbles
+    foamDropletColorHex = 0xfef3c7;
+  } else if (params.signatureClass === 'cavitation_burst') {
+    primaryBubbleColorHex = 0xf43f5e;   // rose-tinted vapor bubbles
+    foamDropletColorHex = 0xffe4e6;
+  } else if (params.signatureClass === 'hairline_fissure') {
+    primaryBubbleColorHex = 0x22d3ee;   // cyan high-pressure aerated bubbles
+    foamDropletColorHex = 0xf0f9ff;
+  }
+
+  // Three emitter vents along the dam base (y = -8.5, aligned with sloped upstream toe z ≈ 15.4)
+  const baseEmitterZones: DamBaseEmitterZone[] = [
+    { id: 'base_vent_west', label: 'West Plinth Joint', x: -9.2, y: -8.5, z: 15.4 },
+    { id: 'base_vent_center', label: 'Monolith #14 Base Toe', x: -3.5, y: -8.5, z: 15.4 },
+    { id: 'base_vent_east', label: 'East Intake Base', x: 2.4, y: -8.5, z: 15.4 },
+  ];
+
+  return {
+    isActive,
+    leakProbability: clampedProb,
+    estimatedFlowRateLpm,
+    activeParticleCount,
+    maxParticleCount,
+    emissionRatePerSec,
+    upwardBuoyancySpeed,
+    forwardJetVelocity,
+    turbulenceSwirlRadius,
+    dropletScaleMin: 0.22,
+    dropletScaleMax: Number((0.52 + Math.min(0.38, orificeNorm * 0.14)).toFixed(2)),
+    primaryBubbleColorHex,
+    foamDropletColorHex,
+    baseEmitterZones,
+  };
+}
+
+/**
+ * Pure per-particle kinematics calculator used by the React-Three-Fiber useFrame loop
+ * to position leaking water bubbles and droplets emerging from the dam base.
+ */
+export function computeDamBaseParticleTransform(
+  particleIndex: number,
+  elapsedSec: number,
+  config: DamBaseLeakParticleConfig
+): DamBaseParticleTransform {
+  if (!config.isActive || particleIndex >= config.activeParticleCount) {
+    return {
+      x: 0,
+      y: -50,
+      z: 0,
+      scaleX: 0,
+      scaleY: 0,
+      scaleZ: 0,
+      isDroplet: particleIndex % 2 === 1,
+      cyclePhase: 0,
+      visible: false,
+    };
+  }
+
+  const zones = config.baseEmitterZones;
+  const zone = zones[particleIndex % zones.length];
+  const isDroplet = particleIndex % 2 === 1;
+
+  // Deterministic pseudo-random offsets per particle index
+  const seedA = ((particleIndex * 2654435761) >>> 0) / 4294967296;
+  const seedB = (((particleIndex + 31) * 1597334677) >>> 0) / 4294967296;
+
+  const speedMultiplier = (isDroplet ? 1.25 : 0.85) * (0.8 + 0.4 * seedA);
+  const rawPhase =
+    (elapsedSec * config.upwardBuoyancySpeed * speedMultiplier +
+      particleIndex / Math.max(1, config.activeParticleCount)) %
+    1.0;
+  const cyclePhase = rawPhase < 0 ? rawPhase + 1.0 : rawPhase;
+
+  const swirlAngle = elapsedSec * (2.4 + seedB * 1.6) + particleIndex * 1.15;
+  const radialSpread = (0.35 + cyclePhase * config.turbulenceSwirlRadius) * (0.6 + 0.7 * seedB);
+
+  const x = zone.x + (seedA - 0.5) * 3.6 + Math.cos(swirlAngle) * radialSpread;
+
+  let y: number;
+  let z: number;
+  let baseScale: number;
+
+  if (isDroplet) {
+    // Pressurized leaking water droplet arc emerging from the dam base and splashing upward/outward
+    y = zone.y + cyclePhase * 16.5 - cyclePhase * cyclePhase * 4.2;
+    z = zone.z + cyclePhase * config.forwardJetVelocity + Math.sin(swirlAngle) * 0.75;
+    const envelope = Math.sin(cyclePhase * Math.PI);
+    baseScale =
+      config.dropletScaleMin +
+      envelope * (config.dropletScaleMax - config.dropletScaleMin) * (0.75 + 0.4 * seedA);
+  } else {
+    // Buoyant underwater air/water bubble rising from the dam base to the reservoir surface
+    y = zone.y + cyclePhase * 18.2;
+    z = zone.z + cyclePhase * (config.forwardJetVelocity * 0.65) + Math.sin(swirlAngle) * radialSpread;
+    // Bubble expands as hydrostatic pressure drops near the surface, then pops at cycle > 0.92
+    const growth =
+      cyclePhase < 0.92 ? 0.35 + (cyclePhase / 0.92) * 0.85 : (1.0 - cyclePhase) * 12.0;
+    baseScale =
+      config.dropletScaleMin +
+      Math.max(0.05, growth) * (config.dropletScaleMax - config.dropletScaleMin);
+  }
+
+  return {
+    x: Number(x.toFixed(3)),
+    y: Number(y.toFixed(3)),
+    z: Number(z.toFixed(3)),
+    scaleX: Number(baseScale.toFixed(3)),
+    scaleY: Number((isDroplet ? baseScale * 1.35 : baseScale).toFixed(3)),
+    scaleZ: Number((isDroplet ? baseScale * 1.35 : baseScale).toFixed(3)),
+    isDroplet,
+    cyclePhase: Number(cyclePhase.toFixed(3)),
+    visible: true,
+  };
+}
+
+export const CRITICAL_ORIFICE_DEFORMATION_THRESHOLD_MM = 15.0;
+
+export interface DamOrificeDeformationState {
+  isDeformed: boolean;
+  orificeDiameterMm: number;
+  thresholdMm: number;
+  excessMm: number;
+  normalizedSeverity: number;
+  vertexDisplacementAmplitude: number;
+  crackTextureOpacity: number;
+  canyonFractureSpreadFactor: number;
+  spallingDebrisCount: number;
+  statusLabel: string;
+}
+
+/**
+ * Evaluates whether the `orificeDiameterMm` parameter exceeds the 15mm critical threshold,
+ * returning the conditional 3D crack texture and mesh deformation parameters.
+ */
+export function calculateDamOrificeDeformationState(
+  orificeDiameterMm: number
+): DamOrificeDeformationState {
+  const safeDiameter = Number.isFinite(orificeDiameterMm)
+    ? Math.max(0.1, orificeDiameterMm)
+    : 1.0;
+  const isDeformed = safeDiameter > CRITICAL_ORIFICE_DEFORMATION_THRESHOLD_MM;
+  const excessMm = isDeformed
+    ? Number((safeDiameter - CRITICAL_ORIFICE_DEFORMATION_THRESHOLD_MM).toFixed(2))
+    : 0;
+
+  // Normalized severity from >15mm up to 25mm max slider value (0.15 .. 1.0)
+  const normalizedSeverity = isDeformed
+    ? Number(Math.min(1.0, 0.18 + (excessMm / 10.0) * 0.82).toFixed(3))
+    : 0;
+
+  const vertexDisplacementAmplitude = isDeformed
+    ? Number((0.45 + normalizedSeverity * 1.35).toFixed(3))
+    : 0;
+
+  const crackTextureOpacity = isDeformed
+    ? Number(Math.min(0.98, 0.76 + normalizedSeverity * 0.22).toFixed(2))
+    : 0;
+
+  const canyonFractureSpreadFactor = isDeformed
+    ? Number((1.35 + normalizedSeverity * 1.15).toFixed(2))
+    : 1.0;
+
+  const spallingDebrisCount = isDeformed
+    ? Math.round(18 + normalizedSeverity * 30)
+    : 0;
+
+  const statusLabel = isDeformed
+    ? `CRITICAL BREACH (${safeDiameter.toFixed(1)}mm > 15mm): 3D Mesh Deformation & Deep Fracture Texture ON`
+    : `Intact Surface (${safeDiameter.toFixed(1)}mm ≤ 15mm): Standard Monolith Geometry`;
+
+  return {
+    isDeformed,
+    orificeDiameterMm: Number(safeDiameter.toFixed(1)),
+    thresholdMm: CRITICAL_ORIFICE_DEFORMATION_THRESHOLD_MM,
+    excessMm,
+    normalizedSeverity,
+    vertexDisplacementAmplitude,
+    crackTextureOpacity,
+    canyonFractureSpreadFactor,
+    spallingDebrisCount,
+    statusLabel,
+  };
+}
+
+/**
+ * Computes deterministic 3D vertex displacement (dx, dy, dz) for the concrete dam monolith mesh
+ * when `orificeDiameterMm > 15mm`, buckling the upstream monolith wall outward and splitting
+ * vertices laterally along the Block #14 fracture seam (x ≈ -3.2).
+ */
+export function computeMonolithVertexDeformationOffset(
+  vx: number,
+  vy: number,
+  vz: number,
+  state: DamOrificeDeformationState
+): { dx: number; dy: number; dz: number } {
+  if (!state.isDeformed || state.vertexDisplacementAmplitude <= 0) {
+    return { dx: 0, dy: 0, dz: 0 };
+  }
+
+  // Focus deformation on the upstream monolith face (vz >= 0) near Block #14 (vx around -3.2)
+  const seamCenterX = -3.2;
+  const distX = vx - seamCenterX;
+  const absDistX = Math.abs(distX);
+
+  if (absDistX > 16.0 || vz < -2.0) {
+    return { dx: 0, dy: 0, dz: 0 };
+  }
+
+  const lateralFalloff = Math.exp(-(absDistX * absDistX) / 28.0);
+  const verticalFalloff = Math.exp(-((vy - 4.0) * (vy - 4.0)) / 95.0);
+  const upstreamFactor = vz > 0 ? 1.0 : 0.35;
+  const combinedInfluence = lateralFalloff * verticalFalloff * upstreamFactor;
+
+  const amp = state.vertexDisplacementAmplitude;
+  // Jagged harmonic along height vy
+  const jag = Math.sin(vy * 0.85) * 0.45 + Math.cos(vx * 0.65 + vy * 0.4) * 0.35;
+
+  // Split vertices away from the fracture seam (dx) and buckle outward into the reservoir (+dz)
+  const splitSign = distX >= 0 ? 1 : -1;
+  const dx = Number((splitSign * amp * 0.65 * combinedInfluence * (0.8 + 0.4 * Math.abs(jag))).toFixed(4));
+  const dy = Number((amp * 0.28 * combinedInfluence * jag).toFixed(4));
+  const dz = Number((amp * 1.15 * combinedInfluence * (0.7 + 0.5 * Math.cos(vy * 0.5))).toFixed(4));
+
+  return { dx, dy, dz };
+}
+
+
+

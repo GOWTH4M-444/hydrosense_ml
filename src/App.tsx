@@ -1260,6 +1260,7 @@ export default function App() {
             onUpdateParam={updateParam}
             whimsicalName={whimsicalSoundName}
             onJumpToWorkbench={() => handleSwitchTab('workbench')}
+            leakProbability={inference.leakProbability}
           />
         )}
 

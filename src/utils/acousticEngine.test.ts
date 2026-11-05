@@ -23,6 +23,12 @@ import {
   calculateAcousticPulsePeriodMs,
   calculateAcousticAttenuation,
   calculateAcousticPulseState,
+  getDam3DRegimeAnimationProfile,
+  calculateDamBaseLeakParticleConfig,
+  computeDamBaseParticleTransform,
+  CRITICAL_ORIFICE_DEFORMATION_THRESHOLD_MM,
+  calculateDamOrificeDeformationState,
+  computeMonolithVertexDeformationOffset,
 } from './acousticEngine';
 
 test('synthesizeDamAcousticSignal accurately distinguishes High-Pressure Fissure Jetting from Normal Ambient', () => {
@@ -294,3 +300,147 @@ test('calculateAcousticPulseState returns valid concentric wavefronts with atten
   // Near signal wavefronts must have stronger opacity (less acoustic attenuation)
   assert.ok(stateNear.wavefronts[0].opacity > stateFar.wavefronts[0].opacity);
 });
+
+test('getDam3DRegimeAnimationProfile maps each sound type to distinct 3D structural animations', () => {
+  const fissureProfile = getDam3DRegimeAnimationProfile(PRESET_CONFIGS.fissure_monolith_14.params);
+  const pipingProfile = getDam3DRegimeAnimationProfile(PRESET_CONFIGS.foundation_piping_curtain.params);
+  const cavitationProfile = getDam3DRegimeAnimationProfile(PRESET_CONFIGS.conduit_cavitation_shock.params);
+  const normalProfile = getDam3DRegimeAnimationProfile(PRESET_CONFIGS.nominal_baseline.params);
+
+  // 1. Hairline Fissure: Critical danger with active crack width and high-pressure jet
+  assert.equal(fissureProfile.regime, 'hairline_fissure');
+  assert.equal(fissureProfile.isDanger, true);
+  assert.equal(fissureProfile.severity, 'Critical');
+  assert.ok(fissureProfile.crackWidthScale > 1.0, `Expected fissure crackWidthScale > 1.0, got ${fissureProfile.crackWidthScale}`);
+  assert.ok(fissureProfile.crackJetVelocityRatio > 1.2);
+  assert.equal(fissureProfile.recommendedCameraPreset, 'leak');
+
+  // Larger orifice diameter should scale crack width higher
+  const widerFissure = getDam3DRegimeAnimationProfile({
+    ...PRESET_CONFIGS.fissure_monolith_14.params,
+    orificeDiameterMm: 12.0,
+  });
+  assert.ok(widerFissure.crackWidthScale > fissureProfile.crackWidthScale);
+
+  // 2. Internal Piping: Drifting warning with foundation sediment erosion
+  assert.equal(pipingProfile.regime, 'internal_piping');
+  assert.equal(pipingProfile.isDanger, true);
+  assert.equal(pipingProfile.severity, 'Drifting');
+  assert.ok(pipingProfile.pipingSedimentIntensity > 1.0);
+  assert.equal(pipingProfile.recommendedCameraPreset, 'piping');
+
+  // 3. Cavitation Burst: Critical danger with ultrasonic shockwave rate
+  assert.equal(cavitationProfile.regime, 'cavitation_burst');
+  assert.equal(cavitationProfile.isDanger, true);
+  assert.equal(cavitationProfile.severity, 'Critical');
+  assert.ok(cavitationProfile.cavitationShockRateHz > 4.0);
+  assert.equal(cavitationProfile.recommendedCameraPreset, 'cavitation');
+
+  // 4. Normal Ambient: Safe nominal state with zero crack or piping intensity
+  assert.equal(normalProfile.regime, 'normal_ambient');
+  assert.equal(normalProfile.isDanger, false);
+  assert.equal(normalProfile.severity, 'Nominal');
+  assert.equal(normalProfile.crackWidthScale, 0);
+  assert.equal(normalProfile.pipingSedimentIntensity, 0);
+  assert.equal(normalProfile.cavitationShockRateHz, 0);
+  assert.equal(normalProfile.recommendedCameraPreset, 'overview');
+});
+
+test('calculateDamBaseLeakParticleConfig and computeDamBaseParticleTransform activate dam base bubbles/droplets on high-probability leaks', () => {
+  const fissureSignal = synthesizeDamAcousticSignal(PRESET_CONFIGS.fissure_monolith_14.params);
+  const normalSignal = synthesizeDamAcousticSignal(PRESET_CONFIGS.nominal_baseline.params);
+
+  const highProbConfig = calculateDamBaseLeakParticleConfig(
+    PRESET_CONFIGS.fissure_monolith_14.params,
+    fissureSignal.inference.leakProbability
+  );
+  const lowProbConfig = calculateDamBaseLeakParticleConfig(
+    PRESET_CONFIGS.nominal_baseline.params,
+    normalSignal.inference.leakProbability
+  );
+
+  // High-probability leak (>= 0.50) activates the dam base particle emitter
+  assert.equal(highProbConfig.isActive, true);
+  assert.ok(highProbConfig.leakProbability > 0.75);
+  assert.ok(
+    highProbConfig.activeParticleCount >= 60 &&
+      highProbConfig.activeParticleCount <= highProbConfig.maxParticleCount,
+    `Expected activeParticleCount in [60, 140], got ${highProbConfig.activeParticleCount}`
+  );
+  assert.ok(highProbConfig.estimatedFlowRateLpm > 0);
+  assert.equal(highProbConfig.baseEmitterZones.length, 3);
+
+  // Low-probability leak (< 0.50) deactivates the dam base particle emitter
+  assert.equal(lowProbConfig.isActive, false);
+  assert.equal(lowProbConfig.activeParticleCount, 0);
+  assert.equal(lowProbConfig.estimatedFlowRateLpm, 0);
+
+  // Verify particle transform for both bubble (even index) and droplet (odd index)
+  const bubbleTransform = computeDamBaseParticleTransform(0, 1.25, highProbConfig);
+  const dropletTransform = computeDamBaseParticleTransform(1, 1.25, highProbConfig);
+  const inactiveTransform = computeDamBaseParticleTransform(0, 1.25, lowProbConfig);
+
+  assert.equal(bubbleTransform.visible, true);
+  assert.equal(bubbleTransform.isDroplet, false);
+  assert.ok(bubbleTransform.y >= -8.5 && bubbleTransform.y <= 12.0);
+  assert.ok(bubbleTransform.z >= 14.0);
+  assert.ok(bubbleTransform.scaleX > 0);
+
+  assert.equal(dropletTransform.visible, true);
+  assert.equal(dropletTransform.isDroplet, true);
+  assert.ok(dropletTransform.scaleY > dropletTransform.scaleX, 'Droplets should be elongated vertically');
+
+  assert.equal(inactiveTransform.visible, false);
+  assert.equal(inactiveTransform.scaleX, 0);
+});
+
+test('calculateDamOrificeDeformationState and computeMonolithVertexDeformationOffset toggle crack texture and mesh deformation strictly when orificeDiameterMm > 15mm', () => {
+  assert.equal(CRITICAL_ORIFICE_DEFORMATION_THRESHOLD_MM, 15.0);
+
+  // 1. Below or equal to 15.0mm -> undeformed
+  const stateSmall = calculateDamOrificeDeformationState(3.2);
+  const stateExactThreshold = calculateDamOrificeDeformationState(15.0);
+
+  assert.equal(stateSmall.isDeformed, false);
+  assert.equal(stateSmall.vertexDisplacementAmplitude, 0);
+  assert.equal(stateSmall.crackTextureOpacity, 0);
+  assert.equal(stateSmall.spallingDebrisCount, 0);
+
+  assert.equal(stateExactThreshold.isDeformed, false);
+  assert.equal(stateExactThreshold.vertexDisplacementAmplitude, 0);
+  assert.equal(stateExactThreshold.crackTextureOpacity, 0);
+
+  const zeroOffset = computeMonolithVertexDeformationOffset(-2.8, 5.5, 9.0, stateExactThreshold);
+  assert.deepEqual(zeroOffset, { dx: 0, dy: 0, dz: 0 });
+
+  // 2. Exceeding 15.0mm -> deformed crack texture + vertex displacement active
+  const stateBreach = calculateDamOrificeDeformationState(18.5);
+  const stateExtreme = calculateDamOrificeDeformationState(24.0);
+
+  assert.equal(stateBreach.isDeformed, true);
+  assert.ok(stateBreach.normalizedSeverity > 0 && stateBreach.normalizedSeverity < 1);
+  assert.ok(stateBreach.vertexDisplacementAmplitude > 0.65);
+  assert.ok(stateBreach.crackTextureOpacity > 0.78);
+  assert.ok(stateBreach.canyonFractureSpreadFactor > 1.35);
+  assert.ok(stateBreach.spallingDebrisCount >= 14);
+
+  assert.ok(
+    stateExtreme.vertexDisplacementAmplitude > stateBreach.vertexDisplacementAmplitude,
+    'Larger orifice > 15mm should produce stronger mesh deformation amplitude'
+  );
+
+  // Vertex near Block #14 fracture seam (x = -2.5, y = 5.5, z = 9.0) must displace outward (+dz) and split laterally (+dx)
+  const rightFlankOffset = computeMonolithVertexDeformationOffset(-2.5, 5.5, 9.0, stateBreach);
+  const leftFlankOffset = computeMonolithVertexDeformationOffset(-3.9, 5.5, 9.0, stateBreach);
+
+  assert.ok(rightFlankOffset.dx > 0, `Expected right flank +dx, got ${rightFlankOffset.dx}`);
+  assert.ok(leftFlankOffset.dx < 0, `Expected left flank -dx, got ${leftFlankOffset.dx}`);
+  assert.ok(rightFlankOffset.dz > 0, `Expected upstream buckling +dz, got ${rightFlankOffset.dz}`);
+
+  // Vertex far away on downstream face (z = -10) should remain untouched
+  const farDownstreamOffset = computeMonolithVertexDeformationOffset(20.0, 5.5, -10.0, stateBreach);
+  assert.deepEqual(farDownstreamOffset, { dx: 0, dy: 0, dz: 0 });
+});
+
+
+
