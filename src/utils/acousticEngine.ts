@@ -2139,5 +2139,380 @@ export function computeMonolithVertexDeformationOffset(
   return { dx, dy, dz };
 }
 
+/**
+ * ----------------------------------------------------------------------------
+ * 2D Acoustic Space Embedding Map (MFCCs & Spectral Centroid Clustering)
+ * ----------------------------------------------------------------------------
+ */
+export interface AcousticSpacePoint {
+  id: string;
+  seed: number;
+  whimsicalName: string;
+  signatureClass: AcousticClassId;
+  categoryLabel: 'Calm' | 'Pebbles' | 'Fissure Sprays' | 'Cavitation';
+  colorHex: string;
+  embedX: number; // Normalized [-100, 100] (Spectral Centroid + MFCC c1 axis)
+  embedY: number; // Normalized [-100, 100] (Harmonic Kurtosis + MFCC c2 axis)
+  spectralCentroidHz: number;
+  kurtosis: number;
+  mfcc1: number;
+  mfcc2: number;
+  orificeDiameterMm: number;
+  hydrostaticHeadM: number;
+  sensorDistanceM: number;
+  leakProbabilityPct: number;
+  spillSpeedLpm: number;
+  peakFreqRangeLabel: string;
+  isCurrentActive: boolean;
+  params: GeneratorParams;
+  miniWavePoints: number[];
+}
+
+export interface InspectedAcousticTelemetry {
+  sourcePanel: 'acoustic_space' | 'power_spectrum';
+  label: string;
+  seed?: number;
+  signatureClass: AcousticClassId;
+  spectralCentroidHz: number;
+  kurtosis: number;
+  mfcc1: number;
+  mfcc2: number;
+  leakProbabilityPct: number;
+  spillSpeedLpm: number;
+  peakFreqRangeLabel: string;
+  powerDbPerHz?: number;
+  energySharePct?: number;
+}
+
+export const ACOUSTIC_SPACE_CATEGORY_STYLE: Record<
+  AcousticClassId,
+  {
+    categoryLabel: 'Calm' | 'Pebbles' | 'Fissure Sprays' | 'Cavitation';
+    colorHex: string;
+    clusterCenter: [number, number];
+    peakFreqRangeLabel: string;
+  }
+> = {
+  normal_ambient: {
+    categoryLabel: 'Calm',
+    colorHex: '#10B981', // Green for Calm
+    clusterCenter: [-52, -46],
+    peakFreqRangeLabel: '0.1–0.4 kHz',
+  },
+  internal_piping: {
+    categoryLabel: 'Pebbles',
+    colorHex: '#F59E0B', // Gold for Pebbles
+    clusterCenter: [-46, 46],
+    peakFreqRangeLabel: '0.5–1.5 kHz',
+  },
+  hairline_fissure: {
+    categoryLabel: 'Fissure Sprays',
+    colorHex: '#0EA5E9', // Blue for Fissure Sprays
+    clusterCenter: [50, 48],
+    peakFreqRangeLabel: '3.0–3.5 kHz',
+  },
+  cavitation_burst: {
+    categoryLabel: 'Cavitation',
+    colorHex: '#F43F5E', // Red for Cavitation
+    clusterCenter: [52, -48],
+    peakFreqRangeLabel: '5.5–7.0 kHz',
+  },
+};
+
+/**
+ * Projects extracted acoustic features (MFCCs & spectral centroid) and physical parameters
+ * into a 2D embedding coordinate (embedX, embedY) in [-92, 92].
+ */
+export function projectSignalToAcousticSpace2D(
+  features: Pick<ExtractedFeatures, 'spectralCentroidHz' | 'kurtosis' | 'mfcc'>,
+  params: Pick<GeneratorParams, 'signatureClass' | 'orificeDiameterMm' | 'hydrostaticHeadM' | 'seed'>
+): { embedX: number; embedY: number } {
+  const style = ACOUSTIC_SPACE_CATEGORY_STYLE[params.signatureClass];
+  const [baseCx, baseCy] = style.clusterCenter;
+
+  // Deterministic feature-driven offset around the cluster centroid using MFCC[0], MFCC[1], and Spectral Centroid
+  const mfcc1 = features.mfcc[0] ?? -20;
+  const mfcc2 = features.mfcc[1] ?? 0;
+  const centroidNorm = (features.spectralCentroidHz - 2200) / 2500;
+  const kurtNorm = (features.kurtosis - 3.0) / 6.0;
+  const seedJitterX = Math.sin(params.seed * 0.73) * 9.5;
+  const seedJitterY = Math.cos(params.seed * 1.19) * 9.5;
+
+  const rawX =
+    baseCx +
+    centroidNorm * 11.5 +
+    ((mfcc1 + 25) / 20) * 6.5 +
+    (params.orificeDiameterMm - 4.0) * 0.65 +
+    seedJitterX;
+  const rawY =
+    baseCy +
+    kurtNorm * 8.5 +
+    (mfcc2 / 8.0) * 7.0 +
+    ((params.hydrostaticHeadM - 90) / 50) * 6.5 +
+    seedJitterY;
+
+  const embedX = Number(Math.max(-92, Math.min(92, rawX)).toFixed(1));
+  const embedY = Number(Math.max(-92, Math.min(92, rawY)).toFixed(1));
+
+  return { embedX, embedY };
+}
+
+/**
+ * Builds a rich 2D embedding dataset of recorded dam acoustic tests clustered by
+ * their MFCCs & spectral centroid, always including the user's live active signal.
+ */
+export function generateAcousticSpaceEmbeddingDataset(
+  activeSignal: SynthesizedSignal,
+  recentHistory: SoundHistoryItem[] = []
+): AcousticSpacePoint[] {
+  const points: AcousticSpacePoint[] = [];
+  const seenSeeds = new Set<number>();
+
+  const buildMiniWave = (seed: number, signatureClass: AcousticClassId, orificeMm: number): number[] => {
+    const arr: number[] = [];
+    const freqFactor =
+      signatureClass === 'normal_ambient'
+        ? 1.2
+        : signatureClass === 'internal_piping'
+        ? 2.4
+        : signatureClass === 'hairline_fissure'
+        ? 4.6
+        : 6.2;
+    const ampScale = Math.min(1.0, 0.35 + (orificeMm / 20) * 0.65);
+    for (let i = 0; i < 20; i++) {
+      const t = i / 19;
+      const v =
+        (Math.sin(t * Math.PI * 2 * freqFactor + seed * 0.3) * 0.65 +
+          Math.cos(t * Math.PI * 5 * freqFactor + seed * 0.7) * 0.35) *
+        ampScale;
+      arr.push(Number(Math.max(-0.98, Math.min(0.98, v)).toFixed(2)));
+    }
+    return arr;
+  };
+
+  const computeSpillSpeed = (cls: AcousticClassId, orificeMm: number, headM: number): number => {
+    if (cls === 'normal_ambient') return Number((0.4 + orificeMm * 0.3).toFixed(1));
+    const areaM2 = Math.PI * Math.pow(orificeMm / 2000, 2);
+    const velMs = 0.62 * Math.sqrt(2 * 9.81 * headM);
+    return Number(Math.max(1.2, areaM2 * velMs * 60000).toFixed(1));
+  };
+
+  // 1. Add the current live active signal first
+  const activeStyle = ACOUSTIC_SPACE_CATEGORY_STYLE[activeSignal.params.signatureClass];
+  const activeCoords = projectSignalToAcousticSpace2D(activeSignal.features, activeSignal.params);
+  const loudestBand = [...activeSignal.psdBands].sort((a, b) => b.energySharePct - a.energySharePct)[0];
+
+  points.push({
+    id: `live-${activeSignal.params.seed}`,
+    seed: activeSignal.params.seed,
+    whimsicalName: generateWhimsicalSoundName(activeSignal.params.seed),
+    signatureClass: activeSignal.params.signatureClass,
+    categoryLabel: activeStyle.categoryLabel,
+    colorHex: activeStyle.colorHex,
+    embedX: activeCoords.embedX,
+    embedY: activeCoords.embedY,
+    spectralCentroidHz: Math.round(activeSignal.features.spectralCentroidHz),
+    kurtosis: Number(activeSignal.features.kurtosis.toFixed(2)),
+    mfcc1: Number((activeSignal.features.mfcc[0] ?? -21.4).toFixed(1)),
+    mfcc2: Number((activeSignal.features.mfcc[1] ?? -2.4).toFixed(1)),
+    orificeDiameterMm: Number(activeSignal.params.orificeDiameterMm.toFixed(1)),
+    hydrostaticHeadM: Math.round(activeSignal.params.hydrostaticHeadM),
+    sensorDistanceM: Number(activeSignal.params.sensorDistanceM.toFixed(1)),
+    leakProbabilityPct: Number((activeSignal.inference.leakProbability * 100).toFixed(1)),
+    spillSpeedLpm: Number(activeSignal.inference.estimatedFlowRateLitersPerMin.toFixed(1)),
+    peakFreqRangeLabel: loudestBand ? loudestBand.rangeLabel : activeStyle.peakFreqRangeLabel,
+    isCurrentActive: true,
+    params: { ...activeSignal.params },
+    miniWavePoints: buildMiniWave(
+      activeSignal.params.seed,
+      activeSignal.params.signatureClass,
+      activeSignal.params.orificeDiameterMm
+    ),
+  });
+  seenSeeds.add(activeSignal.params.seed);
+
+  // 2. Include user's recent history items
+  for (const hist of recentHistory) {
+    if (seenSeeds.has(hist.seed)) continue;
+    seenSeeds.add(hist.seed);
+    const st = ACOUSTIC_SPACE_CATEGORY_STYLE[hist.signatureClass];
+    const synthCentroid =
+      hist.signatureClass === 'normal_ambient'
+        ? 410 + (hist.seed % 140)
+        : hist.signatureClass === 'internal_piping'
+        ? 1120 + (hist.seed % 380)
+        : hist.signatureClass === 'hairline_fissure'
+        ? 3420 + (hist.seed % 620)
+        : 5480 + (hist.seed % 820);
+    const synthKurt =
+      hist.signatureClass === 'cavitation_burst'
+        ? 7.8 + (hist.seed % 5) * 0.6
+        : 2.9 + (hist.seed % 4) * 0.25;
+    const synthMfcc: number[] = [
+      hist.signatureClass === 'normal_ambient' ? -31.2 : -19.5 - (hist.seed % 7),
+      hist.signatureClass === 'internal_piping' ? 4.2 : -2.5 + (hist.seed % 5) * 0.8,
+    ];
+    const coords = projectSignalToAcousticSpace2D(
+      { spectralCentroidHz: synthCentroid, kurtosis: synthKurt, mfcc: synthMfcc },
+      hist.params
+    );
+    const probPct =
+      hist.signatureClass === 'normal_ambient'
+        ? 4.2
+        : hist.signatureClass === 'internal_piping'
+        ? 78.4
+        : 98.6;
+
+    points.push({
+      id: `hist-${hist.seed}`,
+      seed: hist.seed,
+      whimsicalName: hist.whimsicalName,
+      signatureClass: hist.signatureClass,
+      categoryLabel: st.categoryLabel,
+      colorHex: st.colorHex,
+      embedX: coords.embedX,
+      embedY: coords.embedY,
+      spectralCentroidHz: synthCentroid,
+      kurtosis: Number(synthKurt.toFixed(2)),
+      mfcc1: Number(synthMfcc[0].toFixed(1)),
+      mfcc2: Number(synthMfcc[1].toFixed(1)),
+      orificeDiameterMm: Number(hist.params.orificeDiameterMm.toFixed(1)),
+      hydrostaticHeadM: Math.round(hist.params.hydrostaticHeadM),
+      sensorDistanceM: Number(hist.params.sensorDistanceM.toFixed(1)),
+      leakProbabilityPct: probPct,
+      spillSpeedLpm: computeSpillSpeed(
+        hist.signatureClass,
+        hist.params.orificeDiameterMm,
+        hist.params.hydrostaticHeadM
+      ),
+      peakFreqRangeLabel: st.peakFreqRangeLabel,
+      isCurrentActive: false,
+      params: { ...hist.params },
+      miniWavePoints: buildMiniWave(
+        hist.seed,
+        hist.signatureClass,
+        hist.params.orificeDiameterMm
+      ),
+    });
+  }
+
+  // 3. Populate 24 deterministic benchmark dam test recordings (6 per leak category)
+  const classes: AcousticClassId[] = [
+    'normal_ambient',
+    'internal_piping',
+    'hairline_fissure',
+    'cavitation_burst',
+  ];
+
+  classes.forEach((cls, cIdx) => {
+    const st = ACOUSTIC_SPACE_CATEGORY_STYLE[cls];
+    for (let i = 0; i < 6; i++) {
+      const seed = 1010 + cIdx * 100 + i * 17;
+      if (seenSeeds.has(seed)) continue;
+      seenSeeds.add(seed);
+
+      const orificeDiameterMm =
+        cls === 'normal_ambient'
+          ? Number((0.5 + i * 0.2).toFixed(1))
+          : cls === 'internal_piping'
+          ? Number((3.5 + i * 1.4).toFixed(1))
+          : cls === 'hairline_fissure'
+          ? Number((2.2 + i * 2.8).toFixed(1))
+          : Number((4.0 + i * 2.5).toFixed(1));
+
+      const hydrostaticHeadM = 55 + ((seed * 7) % 105);
+      const sensorDistanceM = Number((3.5 + ((seed * 3) % 24)).toFixed(1));
+
+      const spectralCentroidHz =
+        cls === 'normal_ambient'
+          ? 280 + i * 38
+          : cls === 'internal_piping'
+          ? 980 + i * 115
+          : cls === 'hairline_fissure'
+          ? 3150 + i * 185
+          : 5250 + i * 240;
+
+      const kurtosis =
+        cls === 'cavitation_burst'
+          ? 6.8 + i * 0.75
+          : cls === 'hairline_fissure'
+          ? 3.2 + i * 0.22
+          : 2.6 + i * 0.15;
+
+      const mfcc1 =
+        cls === 'normal_ambient'
+          ? -34.0 + i * 1.1
+          : cls === 'internal_piping'
+          ? -25.5 + i * 0.9
+          : cls === 'hairline_fissure'
+          ? -20.8 + i * 0.8
+          : -16.4 + i * 0.7;
+
+      const mfcc2 =
+        cls === 'normal_ambient'
+          ? -5.2 + i * 0.6
+          : cls === 'internal_piping'
+          ? 4.6 - i * 0.5
+          : cls === 'hairline_fissure'
+          ? 2.8 + i * 0.45
+          : -4.8 + i * 0.55;
+
+      const sampleParams: GeneratorParams = {
+        signatureClass: cls,
+        hydrostaticHeadM,
+        orificeDiameterMm,
+        sensorDistanceM,
+        concreteAttenuationDb: Number((sensorDistanceM * 0.45).toFixed(1)),
+        turbidityNoiseSnrDb: 14 + (i % 10),
+        turbineRpm: 120 + (i % 4) * 15,
+        durationSec: 1.5,
+        sampleRateHz: 16000,
+        seed,
+      };
+
+      const coords = projectSignalToAcousticSpace2D(
+        { spectralCentroidHz, kurtosis, mfcc: [mfcc1, mfcc2] },
+        sampleParams
+      );
+
+      const leakProbabilityPct =
+        cls === 'normal_ambient'
+          ? Number((2.1 + i * 1.2).toFixed(1))
+          : cls === 'internal_piping'
+          ? Number((72.0 + i * 3.8).toFixed(1))
+          : cls === 'hairline_fissure'
+          ? Number((93.5 + i * 1.1).toFixed(1))
+          : Number((95.0 + i * 0.8).toFixed(1));
+
+      points.push({
+        id: `bench-${seed}`,
+        seed,
+        whimsicalName: generateWhimsicalSoundName(seed),
+        signatureClass: cls,
+        categoryLabel: st.categoryLabel,
+        colorHex: st.colorHex,
+        embedX: coords.embedX,
+        embedY: coords.embedY,
+        spectralCentroidHz,
+        kurtosis: Number(kurtosis.toFixed(2)),
+        mfcc1: Number(mfcc1.toFixed(1)),
+        mfcc2: Number(mfcc2.toFixed(1)),
+        orificeDiameterMm,
+        hydrostaticHeadM,
+        sensorDistanceM,
+        leakProbabilityPct,
+        spillSpeedLpm: computeSpillSpeed(cls, orificeDiameterMm, hydrostaticHeadM),
+        peakFreqRangeLabel: st.peakFreqRangeLabel,
+        isCurrentActive: false,
+        params: sampleParams,
+        miniWavePoints: buildMiniWave(seed, cls, orificeDiameterMm),
+      });
+    }
+  });
+
+  return points;
+}
+
+
 
 

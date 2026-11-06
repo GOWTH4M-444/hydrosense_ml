@@ -29,6 +29,8 @@ import {
   CRITICAL_ORIFICE_DEFORMATION_THRESHOLD_MM,
   calculateDamOrificeDeformationState,
   computeMonolithVertexDeformationOffset,
+  projectSignalToAcousticSpace2D,
+  generateAcousticSpaceEmbeddingDataset,
 } from './acousticEngine';
 
 test('synthesizeDamAcousticSignal accurately distinguishes High-Pressure Fissure Jetting from Normal Ambient', () => {
@@ -441,6 +443,31 @@ test('calculateDamOrificeDeformationState and computeMonolithVertexDeformationOf
   const farDownstreamOffset = computeMonolithVertexDeformationOffset(20.0, 5.5, -10.0, stateBreach);
   assert.deepEqual(farDownstreamOffset, { dx: 0, dy: 0, dz: 0 });
 });
+
+test('generateAcousticSpaceEmbeddingDataset clusters dam tests into 4 distinct 2D feature quadrants with Polaroid preview metadata', () => {
+  const activeSignal = synthesizeDamAcousticSignal(PRESET_CONFIGS.fissure_monolith_14.params);
+  const points = generateAcousticSpaceEmbeddingDataset(activeSignal, []);
+
+  assert.ok(points.length >= 24, `Expected >= 24 points in 2D Acoustic Space, got ${points.length}`);
+
+  const activePoint = points.find((p) => p.isCurrentActive);
+  assert.ok(activePoint, 'Expected current live signal to be marked isCurrentActive');
+  assert.equal(activePoint.categoryLabel, 'Fissure Sprays');
+  assert.equal(activePoint.colorHex, '#0EA5E9');
+  assert.equal(activePoint.miniWavePoints.length, 20);
+
+  // Verify the 4 leak categories map to their distinct 2D quadrants and colors
+  const calmPt = points.find((p) => p.signatureClass === 'normal_ambient')!;
+  const pebblesPt = points.find((p) => p.signatureClass === 'internal_piping')!;
+  const fissurePt = points.find((p) => p.signatureClass === 'hairline_fissure')!;
+  const cavitationPt = points.find((p) => p.signatureClass === 'cavitation_burst')!;
+
+  assert.ok(calmPt.embedX < 0 && calmPt.embedY < 0, 'Calm points should cluster in bottom-left quadrant');
+  assert.ok(pebblesPt.embedX < 0 && pebblesPt.embedY > 0, 'Pebbles points should cluster in top-left quadrant');
+  assert.ok(fissurePt.embedX > 0 && fissurePt.embedY > 0, 'Fissure Spray points should cluster in top-right quadrant');
+  assert.ok(cavitationPt.embedX > 0 && cavitationPt.embedY < 0, 'Cavitation points should cluster in bottom-right quadrant');
+});
+
 
 
 
